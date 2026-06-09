@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 周报生成器 — 10秒出一份专业周报</title>
+  <style>
+    :root { --bg:#0f0f13; --surface:#1a1a22; --surface2:#22222e; --border:#2e2e3e;
+      --accent:#7c6cff; --accent2:#5ce0c0; --text:#e8e8f0; --text2:#9090a8;
+      --danger:#ff6b6b; --success:#5ce0a0; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg); color:var(--text); min-height:100vh; }
+    .header { background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);
+      border-bottom:1px solid var(--border); padding:20px 24px; display:flex;
+      align-items:center; gap:12px; }
+    .header-icon { font-size:28px; }
+    .header-title { font-size:20px; font-weight:700; }
+    .header-subtitle { font-size:13px; color:var(--text2); margin-top:2px; }
+    .header-badge { margin-left:auto; background:linear-gradient(135deg,var(--accent),var(--accent2));
+      color:white; font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; }
+    .container { max-width:1200px; margin:0 auto; padding:24px; display:grid;
+      grid-template-columns:1fr 1fr; gap:24px; }
+    @media(max-width:768px){ .container{grid-template-columns:1fr;} }
+    .panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .panel-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex;
+      align-items:center; gap:8px; font-size:14px; font-weight:600; }
+    .panel-body { padding:20px; }
+    .template-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:20px; }
+    .template-btn { background:var(--surface2); border:2px solid var(--border); color:var(--text2);
+      padding:10px 8px; border-radius:8px; cursor:pointer; font-size:12px; text-align:center; transition:all .2s; }
+    .template-btn:hover { border-color:var(--accent); color:var(--text); }
+    .template-btn.active { border-color:var(--accent); background:rgba(124,108,255,0.15); color:var(--accent); }
+    .template-btn .template-icon { font-size:20px; display:block; margin-bottom:4px; }
+    label { display:block; font-size:12px; font-weight:600; color:var(--text2); margin-bottom:6px;
+      text-transform:uppercase; letter-spacing:0.5px; }
+    textarea,input[type=text],select { width:100%; background:var(--surface2); border:1px solid var(--border);
+      border-radius:8px; color:var(--text); font-size:14px; padding:10px 12px; resize:vertical;
+      transition:border-color .2s; font-family:inherit; }
+    textarea:focus,input:focus,select:focus { outline:none; border-color:var(--accent); }
+    .input-group { margin-bottom:16px; }
+    .input-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+    .tone-tags { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .tone-tag { background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+      padding:4px 10px; border-radius:20px; font-size:12px; cursor:pointer; transition:all .2s; }
+    .tone-tag.active { background:rgba(92,224,192,0.15); border-color:var(--accent2); color:var(--accent2); }
+    .btn-generate { width:100%; background:linear-gradient(135deg,var(--accent),#5a4de0); border:none;
+      color:white; font-size:15px; font-weight:700; padding:14px; border-radius:10px; cursor:pointer;
+      transition:all .2s; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:8px; }
+    .btn-generate:hover { transform:translateY(-1px); box-shadow:0 4px 20px rgba(124,108,255,0.4); }
+    .btn-generate:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+    .output-toolbar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+    .btn-copy,.btn-download,.btn-clear { background:var(--surface2); border:1px solid var(--border);
+      color:var(--text2); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px;
+      transition:all .2s; display:flex; align-items:center; gap:4px; }
+    .btn-copy:hover { border-color:var(--accent2); color:var(--accent2); }
+    .btn-download:hover { border-color:var(--accent); color:var(--accent); }
+    .btn-clear:hover { border-color:var(--danger); color:var(--danger); }
+    #output-area { background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+      min-height:400px; padding:16px; font-size:14px; line-height:1.7; white-space:pre-wrap;
+      font-family:'Menlo','Monaco',monospace; overflow-y:auto; max-height:600px; color:var(--text); }
+    #output-rendered { display:none; background:var(--surface2); border:1px solid var(--border);
+      border-radius:8px; min-height:400px; max-height:600px; padding:20px; font-size:14px;
+      line-height:1.8; overflow-y:auto; color:var(--text); }
+    #output-rendered h1,#output-rendered h2,#output-rendered h3 { color:var(--accent2); margin:12px 0 8px; }
+    #output-rendered h1 { font-size:20px; border-bottom:1px solid var(--border); padding-bottom:8px; }
+    #output-rendered h2 { font-size:16px; }
+    #output-rendered h3 { font-size:14px; color:var(--accent); }
+    #output-rendered ul,#output-rendered ol { padding-left:20px; margin:6px 0; }
+    #output-rendered li { margin:3px 0; }
+    #output-rendered strong { color:var(--accent2); }
+    #output-rendered code { background:rgba(124,108,255,0.1); border:1px solid rgba(124,108,255,0.3);
+      padding:1px 5px; border-radius:3px; font-size:12px; font-family:monospace; }
+    #output-rendered p { margin:6px 0; }
+    #output-rendered blockquote { border-left:3px solid var(--accent); padding-left:12px; color:var(--text2); margin:8px 0; }
+    .view-toggle { display:flex; gap:0; background:var(--surface2); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+    .view-btn { background:transparent; border:none; color:var(--text2); padding:6px 12px; cursor:pointer; font-size:12px; transition:all .2s; }
+    .view-btn.active { background:var(--accent); color:white; }
+    .status-bar { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface2);
+      border-radius:6px; margin-bottom:12px; font-size:12px; color:var(--text2); }
+    .status-dot { width:6px; height:6px; border-radius:50%; background:var(--text2); }
+    .status-dot.loading { background:var(--accent); animation:pulse 1s infinite; }
+    .status-dot.done { background:var(--success); }
+    .status-dot.error { background:var(--danger); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .example-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    .example-chip { background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+      padding:3px 8px; border-radius:4px; font-size:11px; cursor:pointer; transition:all .2s; }
+    .example-chip:hover { border-color:var(--accent2); color:var(--accent2); }
+    .word-count { text-align:right; font-size:11px; color:var(--text2); margin-top:4px; }
+    .config-toggle { display:flex; align-items:center; justify-content:space-between; padding:10px 0;
+      cursor:pointer; font-size:13px; color:var(--text2); border-top:1px solid var(--border); margin-top:16px; }
+    .config-toggle:hover { color:var(--text); }
+    .config-section { display:none; padding-top:12px; }
+    .config-section.visible { display:block; }
+    .stats-bar { display:flex; gap:16px; padding:12px 20px; background:rgba(124,108,255,0.05);
+      border-top:1px solid var(--border); font-size:12px; color:var(--text2); }
+    .stat-item strong { color:var(--accent2); }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+    ::-webkit-scrollbar-thumb:hover { background:var(--text2); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">📋</div>
+  <div>
+    <div class="header-title">AI 周报生成器</div>
+    <div class="header-subtitle">输入工作内容，10秒生成专业周报</div>
+  </div>
+  <div class="header-badge">Powered by AISA</div>
+</div>
+
+<div class="container">
+  <div class="panel">
+    <div class="panel-header">✏️ 填写内容</div>
+    <div class="panel-body">
+      <label>选择模板</label>
+      <div class="template-grid" id="templateGrid">
+        <div class="template-btn active" data-template="tech"><span class="template-icon">⚙️</span>技术周报</div>
+        <div class="template-btn" data-template="product"><span class="template-icon">🚀</span>产品周报</div>
+        <div class="template-btn" data-template="personal"><span class="template-icon">👤</span>个人总结</div>
+        <div class="template-btn" data-template="manager"><span class="template-icon">📊</span>管理汇报</div>
+        <div class="template-btn" data-template="design"><span class="template-icon">🎨</span>设计周报</div>
+        <div class="template-btn" data-template="research"><span class="template-icon">🔬</span>研究报告</div>
+      </div>
+
+      <div class="input-row">
+        <div><label>姓名/团队（可选）</label><input type="text" id="authorName" placeholder="张三 / 前端团队"/></div>
+        <div><label>汇报周期</label><input type="text" id="weekRange" placeholder="2026.06.02 - 06.08"/></div>
+      </div>
+
+      <div class="input-group">
+        <label>本周工作内容（随便写，AI 会整理）</label>
+        <textarea id="workContent" rows="8" placeholder="把本周做的事情随手写下来，越乱越没关系：
+- 修了登录页的 bug，用户反馈很好
+- 参加了需求评审，对接了3个需求
+- 调研了新的状态管理方案 zustand
+- 周三 code review 了同事的 PR
+- 文档更新：写了部署手册
+
+AI 会帮你整理成专业格式 👇"></textarea>
+        <div class="word-count" id="wordCount">0 字</div>
+        <div class="example-chips">
+          <span>示例：</span>
+          <span class="example-chip" onclick="fillExample('tech')">技术团队</span>
+          <span class="example-chip" onclick="fillExample('product')">产品团队</span>
+          <span class="example-chip" onclick="fillExample('solo')">独立开发</span>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>下周计划（可选）</label>
+        <textarea id="nextPlan" rows="3" placeholder="下周要做什么？不写就让 AI 根据本周内容推断"></textarea>
+      </div>
+
+      <div class="input-group">
+        <label>风格调性</label>
+        <div class="tone-tags" id="toneTags">
+          <span class="tone-tag active" data-tone="professional">专业正式</span>
+          <span class="tone-tag" data-tone="concise">简洁精炼</span>
+          <span class="tone-tag" data-tone="detailed">详细充分</span>
+          <span class="tone-tag" data-tone="casual">轻松活泼</span>
+          <span class="tone-tag" data-tone="data">数据驱动</span>
+        </div>
+      </div>
+
+      <div class="config-toggle" onclick="toggleConfig()">
+        <span>⚙️ 高级设置</span><span id="configArrow">▼</span>
+      </div>
+      <div class="config-section" id="configSection">
+        <div class="input-group"><label>AISA API Key</label><input type="text" id="apiKey" placeholder="sk-..."></div>
+        <div class="input-group"><label>自定义 Prompt 补充（可选）</label>
+          <textarea id="customPrompt" rows="2" placeholder="额外要求，例如：重点突出数据指标，风险部分加粗"></textarea>
+        </div>
+      </div>
+
+      <button class="btn-generate" id="generateBtn" onclick="generateReport()">
+        <span id="btnIcon">✨</span><span id="btnText">生成周报</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      📄 生成结果
+      <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+        <div class="view-toggle">
+          <button class="view-btn active" onclick="switchView('raw')" id="viewRaw">源码</button>
+          <button class="view-btn" onclick="switchView('preview')" id="viewPreview">预览</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="status-bar" id="statusBar">
+        <div class="status-dot" id="statusDot"></div><span id="statusText">等待生成...</span>
+      </div>
+      <div class="output-toolbar">
+        <button class="btn-copy" onclick="copyOutput()">📋 复制</button>
+        <button class="btn-download" onclick="downloadOutput()">⬇️ 下载 .md</button>
+        <button class="btn-clear" onclick="clearOutput()">🗑️ 清空</button>
+      </div>
+      <div id="output-area">// 生成的周报将显示在这里
+
+支持多种输出格式：
+• Markdown（可直接粘贴到飞书/Confluence/语雀）
+• 纯文本（直接发邮件）
+• 结构化格式（含数据指标分析）
+
+点击「生成周报」开始 →</div>
+      <div id="output-rendered"></div>
+    </div>
+    <div class="stats-bar" id="statsBar" style="display:none;">
+      <span>字数：<strong id="statWords">-</strong></span>
+      <span>耗时：<strong id="statTime">-</strong></span>
+      <span>tokens：<strong id="statTokens">-</strong></span>
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedTemplate='tech', selectedTone='professional', currentView='raw', generatedContent='';
+const DEFAULT_API_KEY='sk-d2n3PIPWBOc3VTgqHuqvtmTaSZ5JtolHBnUAaUrAZgTjst41';
+
+const templates={
+  tech:{name:'技术周报',systemPrompt:`你是一位技术团队的周报写手。请将用户输入的零散工作内容整理成一份规范的技术周报。
+格式要求：
+1. 标题：本周技术工作总结（含周期日期）
+2. 核心成果（3-5条，每条一行，突出技术价值）
+3. 详细工作内容（按功能/模块分组）
+4. 技术债/问题与解决方案
+5. 下周计划
+6. 风险与阻塞项（如有）
+要求：专业、精准，使用技术术语，bullet point 格式，适当加粗关键词。`},
+  product:{name:'产品周报',systemPrompt:`你是一位产品团队的周报写手。请将用户输入的零散工作内容整理成一份规范的产品周报。
+格式要求：
+1. 标题：产品周报（含周期日期）
+2. 本周核心进展
+3. 需求进度（待开发/开发中/已上线）
+4. 用户反馈与数据洞察
+5. 跨团队协作事项
+6. 下周重点
+7. 风险提示
+要求：以用户价值和业务目标为导向，数据驱动，简洁有力。`},
+  personal:{name:'个人总结',systemPrompt:`你是一位职场写作助手。请将用户输入的工作内容整理成一份简洁的个人工作周总结。
+格式要求：
+1. 本周亮点（1-2条最重要的成果）
+2. 完成事项（按优先级排序）
+3. 学习与成长
+4. 下周目标
+5. 需要支持（如有）
+要求：突出个人贡献，语气积极，重点突出，200-400字为宜。`},
+  manager:{name:'管理汇报',systemPrompt:`你是一位团队管理者的汇报写手。请将用户输入的内容整理成适合向上级汇报的管理周报。
+格式要求：
+1. 本周 Executive Summary（3-5句话总结）
+2. OKR 进展（关键结果完成情况）
+3. 团队状态（士气/人员/资源）
+4. 重要里程碑/风险
+5. 下周目标与资源需求
+6. 决策请示（如有）
+要求：高度概括，数字说话，突出影响力和决策点。`},
+  design:{name:'设计周报',systemPrompt:`你是一位设计团队的周报写手。请将用户输入的内容整理成一份视觉设计周报。
+格式要求：
+1. 本周设计产出（按项目分类）
+2. 设计评审情况
+3. 用户研究与洞察
+4. 设计规范/组件库更新
+5. 下周排期
+6. 待决策设计问题
+要求：突出设计决策和用户价值，注重视觉思维的表达。`},
+  research:{name:'研究报告',systemPrompt:`你是一位研究员的写作助手。请将用户输入的研究工作整理成一份规范的研究进展报告。
+格式要求：
+1. 研究课题与目标
+2. 本周进展（方法/实验/数据）
+3. 关键发现与洞察
+4. 问题与挑战
+5. 下周研究计划
+6. 参考资料（如有提及）
+要求：严谨、客观、数据导向，使用准确的学术/研究表述。`}
+};
+
+const examples={
+  tech:`修复了用户反馈的登录页闪烁问题，根因是 token 刷新时序问题
+参加了 v3.2 需求评审会，确认了用户中心重构方案
+调研 zustand vs jotai 状态管理选型，输出技术对比文档
+code review 了小李的 PR，提出5个优化建议并通过
+完成了部署文档更新和 CI/CD pipeline 优化
+修复生产环境3个 P1 级 bug（#342 #356 #388）
+本周代码提交 47 个 commit，合并 PR 12 个`,
+  product:`主导完成了支付流程 A/B 测试方案设计，预期提升转化率8%
+和开发对齐了用户画像功能的技术方案，确认了数据口径
+分析本周用户反馈 200+ 条，提炼出3个核心痛点
+参与了竞品分析会议，更新了竞品对比文档
+完成了 Q3 OKR 拆解并和团队完成对齐
+跟进了 App Store 审核进度，预计下周上线
+本周上线2个功能点：搜索优化、消息推送改版`,
+  solo:`完成了 SaaS 产品的 Stripe 支付集成，测试通过
+发布了3篇技术博客，总浏览量 2800
+冷邮件联系了 50 个潜在客户，8个回复，2个预约 demo
+优化了落地页，跳出率从 78% 降到 65%
+参加了 IndieHackers 线上活动，认识了5个开发者
+本月 MRR $340，环比增长 22%
+修复了用户报告的数据导出 bug`
+};
+
+const toneMap={
+  professional:'要求：专业正式的商务语气，适合企业内部正式汇报',
+  concise:'要求：简洁精炼，每条不超过15字，总字数控制在300字以内',
+  detailed:'要求：详细充分，每个要点展开说明，补充上下文和背景',
+  casual:'要求：轻松活泼的语气，像跟朋友聊天一样汇报，适当用表情',
+  data:'要求：数据驱动，每个成果尽量量化，用百分比/数字说话'
+};
+
+document.querySelectorAll('.template-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.template-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); selectedTemplate=btn.dataset.template;
+  });
+});
+
+document.querySelectorAll('.tone-tag').forEach(tag=>{
+  tag.addEventListener('click',()=>{
+    document.querySelectorAll('.tone-tag').forEach(t=>t.classList.remove('active'));
+    tag.classList.add('active'); selectedTone=tag.dataset.tone;
+  });
+});
+
+document.getElementById('workContent').addEventListener('input',function(){
+  document.getElementById('wordCount').textContent=`${this.value.length} 字`;
+});
+
+function fillExample(type){
+  const t=examples[type]||examples.tech;
+  document.getElementById('workContent').value=t;
+  document.getElementById('wordCount').textContent=`${t.length} 字`;
+  if(type==='tech') document.querySelector('[data-template="tech"]').click();
+  if(type==='product') document.querySelector('[data-template="product"]').click();
+  const now=new Date();
+  const mon=new Date(now); mon.setDate(now.getDate()-now.getDay()+1);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  const fmt=d=>`${d.getMonth()+1}.${String(d.getDate()).padStart(2,'0')}`;
+  document.getElementById('weekRange').value=`${now.getFullYear()}.${fmt(mon)} - ${fmt(sun)}`;
+}
+
+function toggleConfig(){
+  const s=document.getElementById('configSection');
+  document.getElementById('configArrow').textContent=s.classList.toggle('visible')?'▲':'▼';
+}
+
+function switchView(v){
+  currentView=v;
+  document.getElementById('viewRaw').classList.toggle('active',v==='raw');
+  document.getElementById('viewPreview').classList.toggle('active',v==='preview');
+  document.getElementById('output-area').style.display=v==='raw'?'block':'none';
+  document.getElementById('output-rendered').style.display=v==='preview'?'block':'none';
+}
+
+function renderMarkdown(md){
+  return md
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/```([\s\S]*?)```/g,'<pre><code>$1</code></pre>')
+    .replace(/`(.+?)`/g,'<code>$1</code>')
+    .replace(/^\> (.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/^\s*-\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.+<\/li>)/s,'<ul>$1</ul>')
+    .replace(/^\s*\d+\.\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.+<\/li>)/s,'<ol>$1</ol>')
+    .replace(/\n\n/g,'<p></p>');
+}
+
+async function generateReport(){
+  const content=document.getElementById('workContent').value.trim();
+  if(!content){alert('请填写本周工作内容'); return;}
+
+  const apiKey=document.getElementById('apiKey').value.trim()||DEFAULT_API_KEY;
+  const author=document.getElementById('authorName').value.trim();
+  const weekRange=document.getElementById('weekRange').value.trim();
+  const nextPlan=document.getElementById('nextPlan').value.trim();
+  const customPrompt=document.getElementById('customPrompt').value.trim();
+
+  const tpl=templates[selectedTemplate];
+  const tone=toneMap[selectedTone];
+
+  let userPrompt=`请将以下内容整理成一份${tpl.name}。\n\n【本周工作内容】\n${content}`;
+  if(author) userPrompt+=`\n\n汇报人：${author}`;
+  if(weekRange) userPrompt+=`\n汇报周期：${weekRange}`;
+  if(nextPlan) userPrompt+=`\n\n【已知下周计划】\n${nextPlan}`;
+  userPrompt+=`\n\n${tone}`;
+  if(customPrompt) userPrompt+=`\n\n额外要求：${customPrompt}`;
+  userPrompt+=`\n\n请直接输出周报正文（Markdown 格式），不要有解释性文字。`;
+
+  setStatus('loading','正在生成中，请稍候...');
+  document.getElementById('generateBtn').disabled=true;
+  document.getElementById('btnText').textContent='生成中...';
+  const t0=Date.now();
+
+  try{
+    const resp=await fetch('https://api.aisa.one/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        messages:[
+          {role:'system',content:tpl.systemPrompt},
+          {role:'user',content:userPrompt}
+        ],
+        temperature:0.7,
+        max_tokens:2000
+      })
+    });
+    if(!resp.ok){
+      const err=await resp.text();
+      throw new Error(`API 错误 ${resp.status}: ${err}`);
+    }
+    const data=await resp.json();
+    generatedContent=data.choices?.[0]?.message?.content||'';
+    if(!generatedContent) throw new Error('返回内容为空');
+
+    const elapsed=Date.now()-t0;
+    const tokens=data.usage?.total_tokens||'~';
+
+    document.getElementById('output-area').textContent=generatedContent;
+    document.getElementById('output-rendered').innerHTML=renderMarkdown(generatedContent);
+
+    document.getElementById('statsBar').style.display='flex';
+    document.getElementById('statWords').textContent=generatedContent.length;
+    document.getElementById('statTime').textContent=(elapsed/1000).toFixed(1)+'s';
+    document.getElementById('statTokens').textContent=tokens;
+
+    setStatus('done','✅ 生成成功！支持复制/下载/预览');
+  }catch(e){
+    console.error(e);
+    setStatus('error','❌ 生成失败：'+e.message);
+    document.getElementById('output-area').textContent='生成失败：'+e.message+'\n\n请检查 API Key 是否正确，或刷新重试。';
+  }finally{
+    document.getElementById('generateBtn').disabled=false;
+    document.getElementById('btnText').textContent='生成周报';
+  }
+}
+
+function setStatus(type,text){
+  const dot=document.getElementById('statusDot');
+  dot.className='status-dot';
+  if(type==='loading') dot.classList.add('loading');
+  if(type==='done') dot.classList.add('done');
+  if(type==='error') dot.classList.add('error');
+  document.getElementById('statusText').textContent=text;
+}
+
+function copyOutput(){
+  if(!generatedContent){alert('先生成周报'); return;}
+  navigator.clipboard.writeText(generatedContent).then(()=>{
+    const btn=document.querySelector('.btn-copy');
+    const old=btn.textContent;
+    btn.textContent='✅ 已复制';
+    setTimeout(()=>btn.textContent=old,2000);
+  });
+}
+
+function downloadOutput(){
+  if(!generatedContent){alert('先生成周报'); return;}
+  const author=document.getElementById('authorName').value.trim()||'周报';
+  const range=document.getElementById('weekRange').value.trim()||'';
+  const filename=`${author}${range?'-'+range:''}.md`.replace(/\s+/g,'-');
+  const blob=new Blob([generatedContent],{type:'text/markdown'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+}
+
+function clearOutput(){
+  generatedContent='';
+  document.getElementById('output-area').textContent='// 已清空\n\n点击「生成周报」重新开始 →';
+  document.getElementById('output-rendered').innerHTML='';
+  document.getElementById('statsBar').style.display='none';
+  setStatus('','等待生成...');
+  switchView('raw');
+}
+</script>
+</body>
+</html>
