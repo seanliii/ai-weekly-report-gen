@@ -171,9 +171,27 @@ AI 会帮你整理成专业格式 👇"></textarea>
         <span>⚙️ 高级设置</span><span id="configArrow">▼</span>
       </div>
       <div class="config-section" id="configSection">
-        <div class="input-group"><label>AISA API Key</label><input type="text" id="apiKey" placeholder="sk-..."></div>
+        <div class="input-group">
+          <label>API 服务商</label>
+          <select id="apiProvider" onchange="onProviderChange()">
+            <option value="aisa">AISA (api.aisa.one)</option>
+            <option value="openai">OpenAI (api.openai.com)</option>
+            <option value="openrouter">OpenRouter (openrouter.ai)</option>
+            <option value="glm">智谱 GLM (open.bigmodel.cn)</option>
+            <option value="custom">自定义</option>
+          </select>
+        </div>
+        <div class="input-group"><label>API Base URL</label><input type="text" id="apiBaseUrl" placeholder="https://api.xxx.com/v1"></div>
+        <div class="input-group"><label>API Key</label><input type="text" id="apiKey" placeholder="sk-..."></div>
+        <div class="input-group"><label>模型名称</label><input type="text" id="apiModel" placeholder="claude-sonnet-4-6 / gpt-4.1 / 等"></div>
         <div class="input-group"><label>自定义 Prompt 补充（可选）</label>
           <textarea id="customPrompt" rows="2" placeholder="额外要求，例如：重点突出数据指标，风险部分加粗"></textarea>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:8px;padding:8px;background:rgba(255,107,107,0.05);border-radius:6px;border:1px solid rgba(255,107,107,0.2);">
+          ⚠️ 提示：GitHub Pages 纯静态部署受浏览器 CORS 限制，部分 API 可能无法直接调用。如遇 405/403 错误，请尝试：<br>
+          ① 换用支持 CORS 的 API（如 OpenRouter）<br>
+          ② 在浏览器安装 CORS Unblock 插件临时测试<br>
+          ③ 部署到 Vercel/Cloudflare 等支持后端的环境
         </div>
       </div>
 
@@ -222,7 +240,24 @@ AI 会帮你整理成专业格式 👇"></textarea>
 
 <script>
 let selectedTemplate='tech', selectedTone='professional', currentView='raw', generatedContent='';
-const DEFAULT_API_KEY='sk-d2n3PIPWBOc3VTgqHuqvtmTaSZ5JtolHBnUAaUrAZgTjst41';
+
+const PROVIDER_CONFIG={
+  aisa:{baseUrl:'https://api.aisa.one/v1',model:'claude-sonnet-4-6'},
+  openai:{baseUrl:'https://api.openai.com/v1',model:'gpt-4.1'},
+  openrouter:{baseUrl:'https://openrouter.ai/api/v1',model:'anthropic/claude-sonnet-4'},
+  glm:{baseUrl:'https://open.bigmodel.cn/api/paas/v4',model:'glm-4-flash'},
+  custom:{baseUrl:'',model:''}
+};
+
+function onProviderChange(){
+  const provider=document.getElementById('apiProvider').value;
+  const cfg=PROVIDER_CONFIG[provider];
+  document.getElementById('apiBaseUrl').value=cfg.baseUrl;
+  document.getElementById('apiModel').value=cfg.model;
+}
+
+// 初始化默认值
+onProviderChange();
 
 const templates={
   tech:{name:'技术周报',systemPrompt:`你是一位技术团队的周报写手。请将用户输入的零散工作内容整理成一份规范的技术周报。
@@ -379,11 +414,17 @@ async function generateReport(){
   const content=document.getElementById('workContent').value.trim();
   if(!content){alert('请填写本周工作内容'); return;}
 
-  const apiKey=document.getElementById('apiKey').value.trim()||DEFAULT_API_KEY;
+  const apiKey=document.getElementById('apiKey').value.trim();
+  const apiBaseUrl=document.getElementById('apiBaseUrl').value.trim();
+  const apiModel=document.getElementById('apiModel').value.trim();
   const author=document.getElementById('authorName').value.trim();
   const weekRange=document.getElementById('weekRange').value.trim();
   const nextPlan=document.getElementById('nextPlan').value.trim();
   const customPrompt=document.getElementById('customPrompt').value.trim();
+
+  if(!apiKey){alert('请在「高级设置」中填写 API Key'); toggleConfig(); document.getElementById('apiKey').focus(); return;}
+  if(!apiBaseUrl){alert('请在「高级设置」中填写 API Base URL'); toggleConfig(); document.getElementById('apiBaseUrl').focus(); return;}
+  if(!apiModel){alert('请在「高级设置」中填写模型名称'); toggleConfig(); document.getElementById('apiModel').focus(); return;}
 
   const tpl=templates[selectedTemplate];
   const tone=toneMap[selectedTone];
@@ -402,15 +443,14 @@ async function generateReport(){
   const t0=Date.now();
 
   try{
-    // 纯前端方案：直接调用 AISA API，无需后端服务器
-    const resp=await fetch('https://api.aisa.one/v1/chat/completions',{
+    const resp=await fetch(apiBaseUrl+'/chat/completions',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
         'Authorization':'Bearer '+apiKey
       },
       body:JSON.stringify({
-        model:'claude-sonnet-4-6',
+        model:apiModel,
         messages:[
           {role:'system',content:tpl.systemPrompt},
           {role:'user',content:userPrompt}
@@ -442,7 +482,7 @@ async function generateReport(){
   }catch(e){
     console.error(e);
     setStatus('error','❌ 生成失败：'+e.message);
-    document.getElementById('output-area').textContent='生成失败：'+e.message+'\n\n请检查 API Key 是否正确，或刷新重试。\n\n提示：本工具为纯前端方案，直接调用 AISA API。如果网络受限，可尝试使用代理或更换网络环境。';
+    document.getElementById('output-area').textContent='生成失败：'+e.message+'\n\n排查建议：\n1. 检查 API Key 是否正确\n2. 确认所选 API 支持浏览器跨域调用（CORS）\n3. 尝试切换其他 API 服务商（如 OpenRouter 支持 CORS）\n4. 如遇网络问题，可尝试刷新页面重试';
   }finally{
     document.getElementById('generateBtn').disabled=false;
     document.getElementById('btnText').textContent='生成周报';
