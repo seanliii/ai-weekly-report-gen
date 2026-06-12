@@ -259,6 +259,35 @@ function onProviderChange(){
 // 初始化默认值
 onProviderChange();
 
+// localStorage 持久化
+function saveConfig(){
+  try{
+    localStorage.setItem('weeklyReportConfig',JSON.stringify({
+      provider:document.getElementById('apiProvider').value,
+      apiKey:document.getElementById('apiKey').value,
+      apiBaseUrl:document.getElementById('apiBaseUrl').value,
+      apiModel:document.getElementById('apiModel').value,
+      authorName:document.getElementById('authorName').value
+    }));
+  }catch(e){}
+}
+function loadConfig(){
+  try{
+    const cfg=JSON.parse(localStorage.getItem('weeklyReportConfig')||'{}');
+    if(cfg.provider){document.getElementById('apiProvider').value=cfg.provider; onProviderChange();}
+    if(cfg.apiKey) document.getElementById('apiKey').value=cfg.apiKey;
+    if(cfg.apiBaseUrl) document.getElementById('apiBaseUrl').value=cfg.apiBaseUrl;
+    if(cfg.apiModel) document.getElementById('apiModel').value=cfg.apiModel;
+    if(cfg.authorName) document.getElementById('authorName').value=cfg.authorName;
+  }catch(e){}
+}
+loadConfig();
+['apiProvider','apiKey','apiBaseUrl','apiModel','authorName'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener('change',saveConfig);
+  if(el && el.tagName==='INPUT') el.addEventListener('blur',saveConfig);
+});
+
 const templates={
   tech:{name:'技术周报',systemPrompt:`你是一位技术团队的周报写手。请将用户输入的零散工作内容整理成一份规范的技术周报。
 格式要求：
@@ -348,10 +377,23 @@ const toneMap={
   data:'要求：数据驱动，每个成果尽量量化，用百分比/数字说话'
 };
 
+// 模板 placeholder 映射
+const templatePlaceholders={
+  tech:'把本周做的事情随手写下来，越乱越没关系：\n- 修了登录页的 bug，用户反馈很好\n- 参加了需求评审，对接了3个需求\n- 调研了新的状态管理方案 zustand\n- 周三 code review 了同事的 PR\n- 文档更新：写了部署手册\n\nAI 会帮你整理成专业格式 👇',
+  product:'随手写下本周产品进展，不用整理：\n- 完成了支付流程 A/B 测试方案\n- 和开发对齐了用户画像功能技术方案\n- 分析用户反馈 200 条，提炼3个核心痛点\n- 跟进 App Store 审核进度\n\nAI 会帮你整理成产品周报 👇',
+  personal:'写下本周你做了什么：\n- 完成了某个项目/任务\n- 参加了哪些会议\n- 遇到了什么问题，怎么解决的\n- 学到了什么\n\nAI 会整理成个人工作总结 👇',
+  manager:'写下本周团队情况（无需格式）：\n- 团队完成了哪些目标\n- 遇到哪些风险/问题\n- 需要向上级汇报的重要事项\n- 下周重点和资源需求\n\nAI 会整理成管理汇报 👇',
+  design:'随手写下本周设计工作：\n- 完成了哪些页面/组件设计\n- 参与了哪些评审\n- 遇到的设计问题\n- 输出了哪些规范文档\n\nAI 会整理成设计周报 👇',
+  research:'写下本周研究进展：\n- 研究了什么方向/问题\n- 做了哪些实验/分析\n- 有什么发现和洞察\n- 遇到了哪些挑战\n\nAI 会整理成研究报告 👇'
+};
+
 document.querySelectorAll('.template-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('.template-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); selectedTemplate=btn.dataset.template;
+    // 同步更新 placeholder
+    const workEl=document.getElementById('workContent');
+    if(!workEl.value) workEl.placeholder=templatePlaceholders[selectedTemplate]||templatePlaceholders.tech;
   });
 });
 
@@ -403,10 +445,10 @@ function renderMarkdown(md){
     .replace(/```([\s\S]*?)```/g,'<pre><code>$1</code></pre>')
     .replace(/`(.+?)`/g,'<code>$1</code>')
     .replace(/^\> (.+)$/gm,'<blockquote>$1</blockquote>')
-    .replace(/^\s*-\s+(.+)$/gm,'<li>$1</li>')
-    .replace(/(<li>.+<\/li>)/s,'<ul>$1</ul>')
-    .replace(/^\s*\d+\.\s+(.+)$/gm,'<li>$1</li>')
-    .replace(/(<li>.+<\/li>)/s,'<ol>$1</ol>')
+    .replace(/^\s*-\s+(.+)$/gm,'<li class="ul-item">$1</li>')
+    .replace(/^\s*\d+\.\s+(.+)$/gm,'<li class="ol-item">$1</li>')
+    .replace(/(<li class="ul-item">.*?<\/li>)/gs,'<ul>$1</ul>').replace(/<\/ul>\s*<ul>/g,'')
+    .replace(/(<li class="ol-item">.*?<\/li>)/gs,'<ol>$1</ol>').replace(/<\/ol>\s*<ol>/g,'')
     .replace(/\n\n/g,'<p></p>');
 }
 
